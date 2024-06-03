@@ -29,7 +29,6 @@ variables:
   - name: TF_Plan_Apply_Args
     value: " -var 'azure_tenant_id=$ENV:AZURE_TENANTID' -var 'azure_devops_org=$(System.CollectionUri)' -var 'azure_devops_pat=$(Azure_DevOps_Pat)' "
 
-
 stages:
   - stage: Build_TFPlan
     jobs:
