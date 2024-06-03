@@ -126,7 +126,6 @@ stages:
                       & terraform apply `
                         -input=false `
                         -auto-approve `
-                        $(TfPlanApplyArgs) `
                         '$(TERRAFORM_PLAN_PATH)'
 
         
