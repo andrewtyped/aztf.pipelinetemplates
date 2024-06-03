@@ -1,0 +1,140 @@
+parameters:
+  - name: BuildPool
+    type: string
+    default: 'ubuntu-latest'
+  - name: AzureArmServiceConnection
+    type: string
+    default: rg-root-1-deployer
+  - name: TerraformDirectory
+    type: string
+    default: $(Build.SourcesDirectory)/src
+  - name: DeploymentEnvironment
+    type: string
+    default: TfEnv
+  - name: VariableGroups
+    type: object
+    default: []
+  - name: TF_Plan_Apply_Args
+    type: string
+    default: ' '
+
+variables:
+  - name: System.Debug
+    value: true
+  - ${{ each VariableGroup in parameters.VariableGroups }} :
+    - group: ${{ VariableGroup }}
+  - ${{ if ne(' ', parameters.VariableGroup) }}:
+    - group: ${{ parameters.VariableGroup }}
+  #TODO: MAp sensitive variables with group
+  - name: TF_Plan_Apply_Args
+    value: " -var 'azure_tenant_id=$ENV:AZURE_TENANTID' -var 'azure_devops_org=$(System.CollectionUri)' -var 'azure_devops_pat=$(Azure_DevOps_Pat)' "
+
+
+stages:
+  - stage: Build_TFPlan
+    jobs:
+      - job: Build_TFPlan
+        pool: 
+          vmImage: ${{ parameters.BuildPool }}
+        steps:
+          - template: /tf/terraform-init-steps.yml
+            parameters:
+              AzureArmServiceConnection: ${{ parameters.AzureArmServiceConnection }}
+              TerraformDirectory: ${{ parameters. TerraformDirectory }}
+
+          - task: AzureCLI@2
+            name: Terraform_Plan
+            env:
+              ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+              ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
+              ARM_TENANT_ID: $(ARM_TENANT_ID)
+              ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+            inputs:
+              addSpnToEnvironment: true
+              azureSubscription: ${{ parameters.AzureArmServiceConnection }}
+              scriptType: pscore
+              scriptLocation: inlineScript
+              workingDirectory: ${{ parameters.TerraformDirectory }}
+              inlineScript: |
+                Write-Host '##[section]Generate TF Plan'
+                $Directory = '$(Build.ArtifactStagingDirectory)/tfplan'
+                New-Item -ItemType Directory -Path $Directory -Force
+                $PlanFile = Join-Path -Path $Directory -ChildPath terraform.plan
+                & terraform plan -input=false --out=$PlanFile  $(TF_Plan_Apply_Args)
+
+                Write-Host '##[section]Show TF Plan (No Secrets)'
+                $ShowFile = Join-Path -Path $Directory -ChildPath tfplan.txt
+                & terraform show -no-color $PlanFile | Tee-Object -FilePath $ShowFile
+                Write-Host "##vso[task.setvariable variable=TERRAFORM_PLAN_SHOW]$ShowFile"
+                
+          - task:  PublishPipelineArtifact@1
+            name: Publish_TfPlan
+            inputs:
+              artifact: TerraformPlan
+              targetPath: $(TERRAFORM_PLAN_SHOW)
+
+  - stage: Deploy
+    jobs:
+      - deployment: Deploy
+        environment: ${{ parameters.DeploymentEnvironment }}
+        pool:
+          vmImage: ${{ parameters.BuildPool}}
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - template: /tf/terraform-init-steps.yml
+                  parameters:
+                    AzureArmServiceConnection: ${{ parameters.AzureArmServiceConnection }}
+                    TerraformDirectory: ${{ parameters.TerraformDirectory }}
+
+                # Yes we are re-doing the plan. It's unsafe to publish the raw plan as an artifact b/c it contains plain text secrets.
+                # Running plan during the build phase is just a nice sanity check.
+                - task: AzureCLI@2
+                  name: Terraform_Plan
+                  env:
+                    ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+                    ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
+                    ARM_TENANT_ID: $(ARM_TENANT_ID)
+                    ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+                  inputs:
+                    addSpnToEnvironment: true
+                    azureSubscription: ${{ parameters.AzureArmServiceConnection }}
+                    scriptType: pscore
+                    scriptLocation: inlineScript
+                    workingDirectory: ${{ parameters.TerraformDirectory }}
+                    inlineScript: |
+                      Write-Host '##[section]Generate TF Plan'
+                      $Directory = '$(Build.ArtifactStagingDirectory)/tfplan'
+                      New-Item -ItemType Directory -Path $Directory -Force
+                      $PlanFile = Join-Path -Path $Directory -ChildPath terraform.plan
+                      & terraform plan -input=false --out=$PlanFile $(TF_Plan_Apply_Args)
+                      Write-Host "##vso[task.setvariable variable=TERRAFORM_PLAN_PATH]$PlanFile"
+                  
+                - task: AzureCLI@2
+                  name: Terraform_Apply
+                  env:
+                    ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+                    ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
+                    ARM_TENANT_ID: $(ARM_TENANT_ID)
+                    ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+                  inputs:
+                    addSpnToEnvironment: true
+                    azureSubscription: ${{ parameters. AzureArmServiceConnection }}
+                    scriptType: pscore
+                    scriptLocation: inlineScript
+                    workingDirectory: ${{ parameters.TerraformDirectory }}
+                    inlineScript: |
+                      & terraform apply `
+                        -input=false `
+                        -auto-approve `
+                        $(TF_Plan_Apply_Args) `
+                        '$(TERRAFORM_PLAN_PATH)'
+
+        
+
+
+                
+
+              

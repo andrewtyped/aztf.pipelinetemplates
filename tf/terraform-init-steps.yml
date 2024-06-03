@@ -1,0 +1,44 @@
+parameters:
+  - name: AzureArmServiceConnection
+    type: string
+  - name: TerraformDirectory
+    type: string
+    default: $(Build.SourcesDirectory)/dev
+
+
+steps:
+  # Get secrets to use with terraform init
+  # The variables referenced here are set by the az cli task, and derived from the service connection provided to the azureSubscription input.
+  - task: AzureCLI@2
+    name: Terraform_Credentials
+    inputs:
+      addSpnToEnvironment: true
+      azureSubscription: ${{ parameters.AzureArmServiceConnection }}
+      scriptType: pscore
+      scriptLocation: inlineScript
+      inlineScript: |
+        Write-Host 'Dump Env vars'
+        Get-ChildItem Env:
+        Write-Host "##vso[task.setvariable variable=ARM_CLIENT_ID;issecret=true]$($env:servicePrincipalId)"
+        Write-Host "##vso[task.setvariable variable=ARM_OIDC_TOKEN;issecret=true]$($env:idToken)"
+        Write-Host "##vso[task.setvariable variable=ARM_TENANT_ID;issecret=true]$($env:tenantId)"
+        Write-Host "##vso[task.setvariable variable=ARM_SUBSCRIPTION_ID;issecret=true]$(az account show --query id -o tsv)"
+
+  - task: AzureCLI@2
+    name: Terraform_Init
+    env:
+      ARM_CLIENT_ID: $(ARM_CLIENT_ID)
+      ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
+      ARM_TENANT_ID: $(ARM_TENANT_ID)
+      ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+    inputs:
+      addSpnToEnvironment: true
+      azureSubscription: ${{ parameters.AzureArmServiceConnection }}
+      scriptType: pscore
+      scriptLocation: inlineScript
+      workingDirectory: ${{ parameters.TerraformDirectory }}
+      inlineScript: |
+        Write-Host 'Read out containers...'
+        az storage container list --account-name satfstate032424 --auth-mode login
+        Write-Host 'tf init'
+        terraform init
