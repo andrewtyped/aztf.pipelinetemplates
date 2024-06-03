@@ -23,8 +23,6 @@ variables:
     value: true
   - ${{ each VariableGroup in parameters.VariableGroups }} :
     - group: ${{ VariableGroup }}
-  - ${{ if ne(' ', parameters.VariableGroup) }}:
-    - group: ${{ parameters.VariableGroup }}
   #TODO: MAp sensitive variables with group
   - name: TfPlanApplyArgs
     value: " -var 'azure_tenant_id=$ENV:AZURE_TENANTID' -var 'azure_devops_org=$(System.CollectionUri)' -var 'azure_devops_pat=$(Azure_DevOps_Pat)' "
