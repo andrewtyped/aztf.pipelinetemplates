@@ -70,6 +70,7 @@ stages:
               targetPath: $(TERRAFORM_PLAN_SHOW)
 
   - stage: Deploy
+    dependsOn: []
     jobs:
       - deployment: Deploy
         environment: ${{ parameters.DeploymentEnvironment }}
