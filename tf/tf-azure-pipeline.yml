@@ -26,6 +26,8 @@ variables:
 
 stages:
   - stage: Build_TFPlan
+    #Disabling this for now
+    condition: false
     jobs:
       - job: Build_TFPlan
         pool: 
