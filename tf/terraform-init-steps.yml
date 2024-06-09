@@ -38,7 +38,5 @@ steps:
       scriptLocation: inlineScript
       workingDirectory: ${{ parameters.TerraformDirectory }}
       inlineScript: |
-        Write-Host 'Read out containers...'
-        az storage container list --account-name satfstate032424 --auth-mode login
         Write-Host 'tf init'
         terraform init

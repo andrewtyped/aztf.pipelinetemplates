@@ -113,6 +113,7 @@ stages:
                     ARM_OIDC_TOKEN: $(ARM_OIDC_TOKEN)
                     ARM_TENANT_ID: $(ARM_TENANT_ID)
                     ARM_SUBSCRIPTION_ID: $(ARM_SUBSCRIPTION_ID)
+                    TF_LOG: debug
                   inputs:
                     addSpnToEnvironment: true
                     azureSubscription: ${{ parameters. AzureArmServiceConnection }}
